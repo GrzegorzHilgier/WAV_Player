@@ -1,4 +1,3 @@
-
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/signal.h>
@@ -6,21 +5,20 @@
 #include <avr/iom16.h>
 #include <util/delay.h>
 
-
 #define wlacz PORTB &= ~(1 << PB4)		//ustaw SS w stan niski-wlacz karte
 #define wylacz PORTB |= (1 << PB4)		//ustaw SS w stan wysoki-wylacz karte
 
-unsigned char sd_error = 1;						//1 oznacza brak karty
-unsigned char bufor[256];						//dwa buffory do zczytywania danych z karty oraz wysylania na glosnik
+//globalne zmienne
+unsigned char sd_error = 1;			//1 oznacza brak karty
+unsigned char bufor[256];			//dwa buffory do zczytywania danych z karty oraz wysylania na glosnik
 unsigned char bufor1[256];
 unsigned char flaga256, flaga512;
 int licznik;
-	uint32_t adres_pliku[20];
+uint32_t adres_pliku[20];
 unsigned char nr_pliku;
-	
-	
 
-void konfiguracja_spi(void)			//KONFIGURACJA SPI
+//KONFIGURACJA SPI	
+void konfiguracja_spi(void)			
 {	
 	DDRB &= ~(1 << PB6);			// pin 7(miso) wejscie
 	DDRB |= (1 << PB4);			// pin 5(SS) wyjscie
@@ -29,8 +27,8 @@ void konfiguracja_spi(void)			//KONFIGURACJA SPI
 	SPCR = (1 << SPE) | (1 << MSTR) ;  // SPE-wlaczenie SPI , MSTR- tryb master, predkosc F/128
 }
 
-
-unsigned char bajt_ms(unsigned char dane) 					//WYSLANIE I ODBIOR BAJTU
+//WYSLANIE I ODBIOR BAJTU Z OPOZNIENIEM
+unsigned char bajt_ms(unsigned char dane) 					
 {  _delay_ms(3);
 	unsigned char odebrane = 0;
 	SPDR = dane;
@@ -40,7 +38,8 @@ unsigned char bajt_ms(unsigned char dane) 					//WYSLANIE I ODBIOR BAJTU
 	return (odebrane);
 }
 
-unsigned char bajt(unsigned char dane) 					//WYSLANIE I ODBIOR BAJTU
+//WYSLANIE I ODBIOR BAJTU
+unsigned char bajt(unsigned char dane) 					
 {  
 	unsigned char odebrane = 0;
 	SPDR = dane;
@@ -50,9 +49,10 @@ unsigned char bajt(unsigned char dane) 					//WYSLANIE I ODBIOR BAJTU
 	return (odebrane);
 }
 
-unsigned char komenda_ms(unsigned char nazwa, uint16_t argH, uint16_t argL, unsigned char CRC )			//wyslanie komendy [6 bit nazwa, 32 bit argument, 8 bit CRC]
+//wyslanie komendy [6 bit nazwa, 32 bit argument, 8 bit CRC]
+unsigned char komenda_ms(unsigned char nazwa, uint16_t argH, uint16_t argL, unsigned char CRC )			
 {	
-	bajt_ms(0xFF);																//nazwe tworzy sie przez 11CMDx 
+	bajt_ms(0xFF);					//nazwe tworzy sie przez 11CMDx 
 	bajt_ms(nazwa);
 	bajt_ms((uint8_t)(argH >> 8));
 	bajt_ms((uint8_t)argH);
@@ -63,9 +63,10 @@ unsigned char komenda_ms(unsigned char nazwa, uint16_t argH, uint16_t argL, unsi
 	return bajt_ms(0xFF);	
 }
 
-unsigned char komenda(unsigned char nazwa, uint16_t argH, uint16_t argL, unsigned char CRC )			//wyslanie komendy [6 bit nazwa, 32 bit argument, 8 bit CRC]
+//wyslanie komendy [6 bit nazwa, 32 bit argument, 8 bit CRC]
+unsigned char komenda(unsigned char nazwa, uint16_t argH, uint16_t argL, unsigned char CRC )			
 {	
-	bajt(0xFF);																//nazwe tworzy sie przez 11CMDx 
+	bajt(0xFF);					//nazwe tworzy sie przez 11CMDx 
 	bajt(nazwa);
 	bajt((uint8_t)(argH >> 8));
 	bajt((uint8_t)argH);
@@ -76,111 +77,80 @@ unsigned char komenda(unsigned char nazwa, uint16_t argH, uint16_t argL, unsigne
 	return bajt(0xFF);	
 }
 
-
-
-int wlacz_sd(void) 						//WLACZENIE KARTY							
+//WLACZENIE KARTY
+int wlacz_sd(void) 													
 { 			
 	unsigned char i,j;
 	unsigned char odebrane;
 	for(i=0;i<16;i++)
 	{
-		wylacz; 													//SS w stan wysoki, potem wyslanie 80 impuslow zegara co
-		for(j=0; j < 10; j++) bajt_ms(0xFF); 							//powoduje reset karty
+		//SS w stan wysoki, potem wyslanie 80 impuslow zegara co powoduje reset karty
+		wylacz; 					
+		for(j=0; j < 10; j++) bajt_ms(0xFF); 							
 		wlacz; 
-		odebrane = komenda_ms(0x40,0,0,0x95);							// wyslanie komendy SMD0 co wprowadza karte w idle state
+		// wyslanie komendy SMD0 co wprowadza karte w idle state
+		odebrane = komenda_ms(0x40,0,0,0x95);							
 		if(odebrane == 0x01) break;
 		else if(i == 15) {sd_error = 1; return(0);}									
 	}	
-	
-	
-	
-	
+		
 	wylacz;
 	wlacz;
-	
+
+	// wysylamy CMD1 tutaj nie potrzebne crc, karta wychodzi z idle 
 	for(i=0;i<16;i++)
 	{
-		odebrane = komenda_ms(0x41,0,0,0xFF);							// wysylamy CMD1 tutaj nie potrzebne crc, karta wychodzi z idle 
+		odebrane = komenda_ms(0x41,0,0,0xFF);							
 		if(odebrane == 0x00) break;
 		else if(i == 15) {sd_error = 1; return(0);}	
 	}
-	
-	
-	
+		
 	wylacz;
-	
-	
+		
 	/*
 	wlacz;
-	komenda(0x77,0,0,0xFF);							//CMD55 -informuje ze nastepna komenda bedzie ACMD
-	
-
-
+	komenda(0x77,0,0,0xFF);					//CMD55 -informuje ze nastepna komenda bedzie ACMD
 	for(i=0;i<16;i++)
 	{
-		odebrane = komenda(0x69,0,0,0xFF);							// ACMD41
+		odebrane = komenda(0x69,0,0,0xFF);		// ACMD41
 		if(odebrane == 0x00) break;
 		else if(i == 15) {sd_error = 1; return(0);}	
 	}	wylacz;
 	*/
-	sd_error = 0;
-	
-return(0);
+	sd_error = 0;	
+	return(0);
 }
-
-
-
-
-
-
-
-
 
 uint8_t sektor(uint32_t adres,uint8_t* bufor)
 {
 	uint32_t adres_sektora;
 	adres_sektora = adres << 8; 		//adres_sektora jest krotnoscia 256
-
 	int i;
-	
-
 
 	wlacz;
 	komenda(0x51,(uint16_t)(adres_sektora >> 16),(uint16_t) adres_sektora,0xFF);
-
 	while(bajt(0xFF) != (char)0xFE);
-
 	for(i=0; i<256; i++)
-    *bufor++ = bajt(0xFF);
-
+   	*bufor++ = bajt(0xFF);
 	bajt(0xFF);
 	bajt(0xFF);
 	wylacz;
-
 	return(0);
 }
-
-
-
-
 	
 void fat16(void)
 {
 	sektor(1,bufor);
 	uint32_t adres_partycji;
 	adres_partycji |= bufor[201];
-	adres_partycji=adres_partycji<<8;                               //pobranie adresu partycji
+	adres_partycji=adres_partycji<<8;       //pobranie adresu partycji
 	adres_partycji |= bufor[200];
 	adres_partycji=adres_partycji<<8;
 	adres_partycji |= bufor[199];
 	adres_partycji=adres_partycji<<8;
-	adres_partycji |= bufor[198];
-	
+	adres_partycji |= bufor[198];	
 	sektor(adres_partycji << 1,bufor); 	// POBRANIE BPB
-/// PARE waznych danych
-
-
-	
+// PARE waznych danych
 	
 //	uint16_t bajty_na_sektor = (bufor[12]<<8) + bufor[11];				
 	uint8_t sektory_na_klaster = bufor[13];							
@@ -193,7 +163,7 @@ void fat16(void)
 	uint32_t klaster_pliku;
 	nr_pliku=0;
 	int i,j;
-	for(i=0; i<64;i++)							//przeszukanie katalogu glownego w celu znalezienia plikow wav
+	for(i=0; i<64;i++)					//przeszukanie katalogu glownego w celu znalezienia plikow wav
 	{
 		int k = 0;
 		sektor((adres_katalogu << 1) + i,bufor);						
@@ -205,29 +175,19 @@ void fat16(void)
 					klaster_pliku = klaster_pliku<<8;
 					klaster_pliku |= bufor[k+26];
 					adres_pliku[nr_pliku] = adres_katalogu + 32 + sektory_na_klaster*(klaster_pliku - 2); 
-
 					nr_pliku++;
 					klaster_pliku=0;
 				}
 			k = k+32;
-		}	
-	
+		}		
 	}
-	
-	
-	
-	
-
-
 }
 
 int plik(uint32_t adres)
 {	
-	uint32_t k=2;
-	
+	uint32_t k=2;	
 	flaga256=0;
-	flaga512=0;
-	
+	flaga512=0;	
 	uint32_t rozmiar_pliku = 0;
 	sektor(adres,bufor);
 	sektor(adres+1,bufor1);
@@ -242,22 +202,14 @@ int plik(uint32_t adres)
 			rozmiar_pliku=rozmiar_pliku<<8;
 			rozmiar_pliku |= bufor[i+5];
 			rozmiar_pliku=rozmiar_pliku<<8;
-			rozmiar_pliku |= bufor[i+4];
-			
-			licznik = i+7+10;
-			
-		
+			rozmiar_pliku |= bufor[i+4];			
+			licznik = i+7+10;		
 		}
 	}
 	
-
-		
-
-
 	SREG |= 0X80;
-	TIMSK |= 0x01;					//INICJACJA PRZERWANIA T0
-	TCCR0 = 0x02;
-	
+	TIMSK |= 0x01;	//INICJACJA PRZERWANIA T0
+	TCCR0 = 0x02;	
 	for(;;)
 	{	
 		if(flaga256 == 1)
@@ -266,28 +218,25 @@ int plik(uint32_t adres)
 			flaga256=0;
 			k++;
 			
-		}
-		
+		}		
 		if(flaga512 == 1)
 		{	
 			sektor(adres+k,bufor1);
 			flaga512 = 0;
 			k++;
 			
-		}
-		
+		}		
 		if((k*256) > rozmiar_pliku)
 		{	
 			
 			
 			TCCR0 = 0x00;
 			TIMSK &= 0xFE;
-			return(0);
-			
-			
+			return(0);			
 		}
 	}
 }
+
 SIGNAL (SIG_OVERFLOW0) 					//PRZERWANIE WEWNETRZNE
 {	
 	TCNT0 = 198;
@@ -301,11 +250,8 @@ SIGNAL (SIG_OVERFLOW0) 					//PRZERWANIE WEWNETRZNE
 
 }
 
-
-
-
-
-void program(void)						//PROGRAM GLOWNY
+//PROGRAM GLOWNY
+void program(void)		
 {		
 	konfiguracja_spi();
 	wlacz_sd();
@@ -316,14 +262,10 @@ void program(void)						//PROGRAM GLOWNY
 	if(sd_error == 0)
 	fat16();
 	else if(sd_error == 1);
-	
-
-
-
 }
 
 
-/*SIGNAL (SIG_INTERRUPT1) 				//PRZERWANIE ZEWNETRZNE INT0
+/*SIGNAL (SIG_INTERRUPT1) 		//PRZERWANIE ZEWNETRZNE INT0
 	{	GICR &= 0X1F;
 		_delay_ms(100);					
 		SREG |= 0X80;
@@ -335,15 +277,9 @@ void program(void)						//PROGRAM GLOWNY
 	}	*/
 	
 
-	
-
-
-
-
 int main(void) 							//INICJACJE PORTOW(BEZ SPI) I PRZERWAN OD CZUJNIKOW
-	{   								//konfiguracja wejscy wyjsc
-		DDRC = 0xFF;
-		
+	{   							//konfiguracja wejscy wyjsc
+		DDRC = 0xFF;		
 		nr_pliku = 0;
 		MCUCSR |= (1<<JTD); 
 		MCUCSR |= (1<<JTD);
@@ -357,15 +293,9 @@ int main(void) 							//INICJACJE PORTOW(BEZ SPI) I PRZERWAN OD CZUJNIKOW
 		{
 			if((!(PINB&(1<<2))) || (!(PIND&(1<<2))) || (!(PIND&(1<<3))))
 			{
-			plik(adres_pliku[i] << 1);
-		
+			plik(adres_pliku[i] << 1);		
 			i++;
-			if(i==nr_pliku) i =0;
-
-				
-			}
-			
-			
-		} 
-		
+			if(i==nr_pliku) i =0;				
+			}						
+		} 		
 	}
